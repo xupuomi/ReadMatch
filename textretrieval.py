@@ -17,6 +17,15 @@ def preprocess_text(text):
     filtered_tokens = [token.lower() for token in tokens if token.isalnum() and token.lower() not in stop_words]
     return filtered_tokens
 
+# Load spaCy model (Elizabeth)
+nlp = spacy.load('en_core_web_sm')
+
+# Lemmatization using spaCy (Elizabeth)
+def lemmatize_tokens(tokens):
+    doc = nlp(' '.join(tokens))
+    return [token.lemma_ for token in doc]
+
+
 def process_books_data(db_path="sqlite:///readmatch.db"):
     engine = sqlalchemy.create_engine(db_path)
     columns = ["title", "genres"]
@@ -28,6 +37,10 @@ def process_books_data(db_path="sqlite:///readmatch.db"):
         processed_data = {}
         for col in columns:
             processed_data[col] = [preprocess_text(doc) for doc in df[col]]
+            lemmatized = [lemmatize_tokens(tokens) for tokens in tokenized]     # added by Elizabeth
+            processed_data[col] = lemmatized                                    # added by Elizabeth
+
+ 
             
         return processed_data
         
