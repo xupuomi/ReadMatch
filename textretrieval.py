@@ -1,5 +1,6 @@
 import pandas as pd
 import sqlalchemy
+import spacy
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 
@@ -37,6 +38,7 @@ def process_books_data(db_path="sqlite:///readmatch.db"):
         processed_data = {}
         for col in columns:
             processed_data[col] = [preprocess_text(doc) for doc in df[col]]
+            tokenized = [preprocess_text(doc) for doc in df[col]]               # added by Elizabeth
             lemmatized = [lemmatize_tokens(tokens) for tokens in tokenized]     # added by Elizabeth
             processed_data[col] = lemmatized                                    # added by Elizabeth
 
