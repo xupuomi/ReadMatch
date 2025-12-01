@@ -1,36 +1,83 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from rank_bm25 import BM25Okapi
+import sqlalchemy
+import numpy as np
+
+import retrieval #retrieval.py 
 
 app = Flask(__name__)
 CORS(app)
 
-# --- Step 1: Load corpus (temporary toy example, later Amazon dataset) ---
-corpus = [
-    "A thrilling journey through space and time with astronauts.",
-    "An introduction to machine learning and artificial intelligence.",
-    "The history of ancient Rome and its powerful emperors.",
-    "Learn Python programming with hands-on projects and examples.",
-    "Exploring the wonders of the deep ocean and marine biology."
-]
+engine = sqlalchemy.create_engine("sqlite:///readmatch.db")
+MODEL_NAME = "sbert_all-MiniLM-L6-v2"
 
-tokenized_corpus = [doc.lower().split() for doc in corpus]
-bm25 = BM25Okapi(tokenized_corpus)
+# Load books + embeddings during start 
+with engine.connect() as conn:
+    rows = conn.execute(sqlalchemy.text("""
+        SELECT b.book_id,
+               b.title,
+               b.authors,
+               b.genres,
+               b.description,
+               b.avg_rating,
+               b.review_count,
+               e.vector
+        FROM books b
+        JOIN embeddings e
+          ON b.book_id = e.book_id
+        WHERE e.model = :model
+    """), {"model": MODEL_NAME}).fetchall()
 
-# --- Step 2: Flask route ---
-@app.route("/recommend", methods=["POST"])
-def recommend():
+BOOKS = []
+emb_list = []
+for row in rows:
+    BOOKS.append({
+        "book_id": row.book_id,
+        "title": row.title,
+        "authors": row.authors,
+        "genres": row.genres,
+        "description": row.description,
+        "avg_rating": row.avg_rating,
+        "review_count": row.review_count,
+    })
+    emb_list.append(np.frombuffer(row.vector, dtype="float32"))
+
+book_embeddings = np.vstack(emb_list)
+
+# Build BM25 index
+bm25_index, tokenized_corpus, corpus_strings = retrieval.build_bm25_index(BOOKS)
+
+# Return top 10 most similar books
+@app.route("/search", methods=["POST"])
+def search():
     data = request.get_json()
-    query = data.get("query", "").lower()
-    mode = data.get("mode", "book")   # you can still keep modes: "book" / "theme"
+    query = (data.get("query") or "").strip()
+    top_n = 10
 
     if not query:
-        return jsonify({"recommendations": []})
+        return jsonify({"results": []})
 
-    tokenized_query = query.split()
-    top_n = bm25.get_top_n(tokenized_query, corpus, n=3)
+    order, final_scores, debug = retrieval.rank_books(
+        query=query,
+        books=BOOKS,
+        bm25=bm25_index,
+        tokenized_corpus=tokenized_corpus,
+        book_embeddings=book_embeddings,
+        top_n=top_n,
+    )
 
-    return jsonify({"recommendations": top_n})
+    results = []
+    for idx in order[:top_n]:
+        b = BOOKS[idx]
+        results.append({
+            "book_id": b["book_id"],
+            "title": b["title"],
+            "authors": b["authors"],
+            "genres": b["genres"],
+            "description": b["description"],
+            "avg_rating": b["avg_rating"],
+            "review_count": b["review_count"],
+            "score": float(final_scores[idx]),
+        })
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    return jsonify({"results": results})
