@@ -3,8 +3,12 @@ import math
 import numpy as np
 # from langdetect import detect
 import re
+import os
 
-df = pd.read_csv('Books_df.csv')
+base_dir = os.path.dirname(os.path.abspath(__file__))
+csv_file_path = os.path.join(base_dir, "Books_df.csv")
+
+df = pd.read_csv(csv_file_path)
 
 # get rid of price column
 df.drop(columns=['Price'], inplace=True)
