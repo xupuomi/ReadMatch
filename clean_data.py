@@ -73,7 +73,7 @@ df = df[df['Type'] != 'Card Book']
 
 
 df.sort_values(by='No. of People rated', ascending=False, inplace=True)
-df = df.iloc[:4000]
+df = df.iloc[:300]
 
 # combine main genre + sub genre columns
 df['Genre'] = df['Main Genre'] + ' ' + df['Sub Genre']
