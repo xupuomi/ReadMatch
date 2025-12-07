@@ -33,7 +33,7 @@ function Header() {
     <header className="bg-white shadow-sm">
       <div className="container mx-auto flex items-center justify-between p-3">
         <Link to="/" className="text-2xl font-bold">
-          BookFinder
+          ReadMatch
         </Link>
 
         <nav className="flex gap-4">
