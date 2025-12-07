@@ -2,7 +2,7 @@ import pandas as pd
 import sqlalchemy
 
 # load CSV
-df = pd.read_csv("cleaned_data.csv")
+df = pd.read_csv("books_with_descriptions.csv")
 
 # connect to SQLite
 engine = sqlalchemy.create_engine("sqlite:///readmatch.db")
@@ -15,9 +15,7 @@ CREATE TABLE IF NOT EXISTS books (
     genres VARCHAR(512),
     description TEXT,
     avg_rating FLOAT,
-    review_count INT,
-    publish_year INT,
-    publisher VARCHAR(512)
+    review_count INT
 );
 
 CREATE TABLE IF NOT EXISTS embeddings (
@@ -30,11 +28,19 @@ CREATE TABLE IF NOT EXISTS embeddings (
 
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name VARCHAR(255),
-    email VARCHAR(255) UNIQUE
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS user_likes (
+CREATE TABLE IF NOT EXISTS user_want_to_read (
+    user_id INT,
+    book_id INT,
+    PRIMARY KEY (user_id, book_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (book_id) REFERENCES books(book_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_ratings (
     user_id INT,
     book_id INT,
     rating FLOAT,
@@ -51,12 +57,10 @@ with engine.connect() as conn:
 df_mapped = pd.DataFrame({
     "title": df["Title"],
     "authors": df["Author"],
-    "genres": df["Main Genre"] + " - " + df["Sub Genre"],
-    "description": df["URLs"],  # store URLs in description
+    "genres": df["Genre"],
+    "description": df["Description"],
     "avg_rating": df["Rating"],
     "review_count": df["No. of People rated"],
-    "publish_year": None,  # not available in CSV
-    "publisher": df["Type"]
 })
 
 # insert into books table
