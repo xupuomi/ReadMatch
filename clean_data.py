@@ -26,13 +26,24 @@ def standardize_author(name):
     return ' '.join(sorted(name_parts))
 
 def clean_genre(genre): 
-    genre = re.sub(r'[&,]', ' ', genre).strip()
-    genre = genre.split()
+    genre = str(genre)
+    genre = genre.replace(' and ', ' ')
     
-    genre = set(OrderedDict.fromkeys(genre)) 
-    genre = list(genre) 
-    genre = " ".join(genre)
-    return genre
+    genre = re.sub(r'[^a-zA-Z0-9\s]', ' ', genre)
+    words = [word.strip() for word in genre.split()]
+    
+    # genre = re.sub(r'[&,]', ' ', genre).strip()
+    # genre = genre.split()
+    
+    unique_words = list(OrderedDict.fromkeys(words))
+    return ", ".join(unique_words) 
+
+    # genre = set(OrderedDict.fromkeys(genre)) 
+    # genre = list(genre) 
+    # genre = " ".join(genre)
+    # return genre
+
+
 
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
