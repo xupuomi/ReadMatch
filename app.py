@@ -81,8 +81,54 @@ for row in rows:
 if emb_list:
     book_embeddings = np.vstack(emb_list)
 else:
-    # No embeddings present; keep empty to avoid startup crash
     book_embeddings = np.zeros((0, 384), dtype="float32")
+
+# user profile based on past rated books
+def get_user_profile_vector(engine, user_id, model_name=MODEL_NAME):
+    with engine.begin() as conn:
+        result = conn.execute(sqlalchemy.text("""
+            SELECT
+                e.vector AS vec_blob,
+                ur.rating AS rating,
+                b.title  AS title
+            FROM user_ratings ur
+            JOIN embeddings e
+                ON ur.book_id = e.book_id
+               AND e.model = :model
+            JOIN books b
+                ON b.book_id = ur.book_id
+            WHERE ur.user_id = :user_id
+        """), {"user_id": user_id, "model": model_name})
+
+        rows = result.mappings().all() 
+
+    if not rows:
+        return None
+
+    vecs = []
+    weights = []
+
+    for row in rows:
+        blob = row["vec_blob"]
+        rating = float(row["rating"])
+        title = row["title"]
+        print(f"   rated {title!r} with rating={rating}")
+        v = np.frombuffer(blob, dtype=np.float32)
+        w = max(rating, 1.0)
+        vecs.append(v)
+        weights.append(w)
+
+    if not vecs:
+        return None
+    V = np.stack(vecs, axis=0)
+    w = np.array(weights, dtype=np.float32)
+    user_vec = (w[:, None] * V).sum(axis=0) / w.sum()
+    norm = np.linalg.norm(user_vec)
+    if norm == 0:
+        return None
+    user_vec = user_vec / norm
+    return user_vec
+
 
 # Build BM25 index
 if BOOKS:
@@ -93,12 +139,20 @@ else:
 # Return top 10 most similar books
 @app.route("/search", methods=["POST"])
 def search():
-    data = request.get_json()
+    data = request.get_json() or {}
     query = (data.get("query") or "").strip()
     top_n = 10
 
     if not query or not BOOKS:
         return jsonify({"results": []})
+    
+    user_id = data.get("user_id")  
+    print("Search user_id:", user_id)
+    if user_id is not None:
+        user_profile_emb = get_user_profile_vector(engine, user_id)
+        print("User profile emb is None?", user_profile_emb is None)
+    else:
+        user_profile_emb = None
 
     order, final_scores, debug = retrieval.rank_books(
         query=query,
@@ -106,9 +160,9 @@ def search():
         bm25=bm25_index,
         tokenized_corpus=tokenized_corpus,
         book_embeddings=book_embeddings,
+        user_profile_emb=user_profile_emb,  
         top_n=top_n,
     )
-
     results = []
     for idx in order[:top_n]:
         b = BOOKS[idx]

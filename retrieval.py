@@ -158,13 +158,27 @@ def compute_semantic_scores(query, book_embeddings):
     )[0]
     return np.dot(book_embeddings, q_emb)  # cosine similarities
 
-def combine_scores(query, bm25_raw, sem_raw, books):
+def compute_user_pref_scores(book_embeddings, user_profile_emb):
+    if user_profile_emb is None:
+        return np.zeros(len(book_embeddings), dtype="float32")
+    return np.dot(book_embeddings, user_profile_emb)
+
+
+def combine_scores(query, bm25_raw, sem_raw, books, user_pref_raw=None):
     q = query.lower()
     bm25_raw = np.array(bm25_raw, dtype="float32")
     sem_raw = np.array(sem_raw, dtype="float32")
 
     bm25_norm = normalize_scores(bm25_raw)
     sem_norm = normalize_scores(sem_raw)
+
+    if user_pref_raw is not None:
+        user_pref_raw = np.array(user_pref_raw, dtype="float32")
+        user_pref_norm = normalize_scores(user_pref_raw)
+    else:
+        user_pref_norm = np.zeros_like(bm25_norm)
+    
+    print("User preference raw scores:", user_pref_raw)
 
     title_scores = []
     main_genre_scores = []
@@ -184,12 +198,13 @@ def combine_scores(query, bm25_raw, sem_raw, books):
     sub_genre_norm = np.array(sub_genre_scores, dtype="float32")
     pop_norm = normalize_scores(pop_scores)
 
-    w_bm25 = 0.25
-    w_sem = 0.35
-    w_title = 0.20
-    w_main_genre = 0.05
+    w_bm25 = 0.22
+    w_sem = 0.32
+    w_title = 0.18
+    w_main_genre = 0.09
     w_sub_genre = 0.05
-    w_pop = 0.15
+    w_pop = 0.13
+    w_user = 0.05  
 
     final_scores = (
         w_bm25 * bm25_norm +
@@ -197,7 +212,8 @@ def combine_scores(query, bm25_raw, sem_raw, books):
         w_title * title_norm +
         w_main_genre * main_genre_norm +
         w_sub_genre * sub_genre_norm +
-        w_pop * pop_norm
+        w_pop * pop_norm +
+        w_user * user_pref_norm
     )
 
     debug = {
@@ -207,8 +223,10 @@ def combine_scores(query, bm25_raw, sem_raw, books):
         "main_genre_norm": main_genre_norm,
         "sub_genre_norm": sub_genre_norm,
         "pop_norm": pop_norm,
+        "user_pref_norm": user_pref_norm,
     }
     return final_scores, debug
+
 
 def is_title_match_like(query: str, title: str) -> bool:
     nq = normalize_title(query)
@@ -243,16 +261,22 @@ def is_title_match_like(query: str, title: str) -> bool:
     return False
 
 
-
-def rank_books(query, books, bm25, tokenized_corpus, book_embeddings, top_n=10):
+def rank_books(query, books, bm25, tokenized_corpus, book_embeddings,
+               user_profile_emb=None, top_n=10):
     qtoks = lemmatize_tokens(simple_tokenize(query))
     bm25_scores = bm25.get_scores(qtoks)
     bm25_scores = proximity_boost(bm25_scores, qtoks, tokenized_corpus, boost=1.0, window=5)
     bm25_scores = negation_penalty(bm25_scores, qtoks, tokenized_corpus, penalty=1.5, window_before=1)
-
     sem_scores = compute_semantic_scores(query, book_embeddings)
+    user_pref_raw = compute_user_pref_scores(book_embeddings, user_profile_emb)
 
-    final_scores, debug = combine_scores(query, bm25_scores, sem_scores, books)
+    final_scores, debug = combine_scores(
+        query,
+        bm25_scores,
+        sem_scores,
+        books,
+        user_pref_raw=user_pref_raw, 
+    )
     final_scores = np.array(final_scores, dtype="float32")
 
     exact_idxs = []
@@ -276,5 +300,6 @@ def rank_books(query, books, bm25, tokenized_corpus, book_embeddings, top_n=10):
 
     order = np.array(order_list, dtype=int)
     debug["exact_title_match"] = np.array(exact_flags, dtype=bool)
+    debug["user_pref_raw"] = user_pref_raw  
 
     return order, final_scores, debug
