@@ -152,7 +152,7 @@ function HomePage({ runSearch, user, authReady, loading }) {
         <div className="flex gap-2">
           <input
             className="flex-1 border rounded p-2"
-            placeholder="Search by title, author or genre"
+            placeholder="Search by title or genre"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />

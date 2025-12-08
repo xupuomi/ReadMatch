@@ -158,7 +158,7 @@ def register():
     password = data.get("password") or ""
     if not username or not password:
         return jsonify({"error": "username and password required"}), 400
-    pwd_hash = generate_password_hash(password)
+    pwd_hash = generate_password_hash(password, method="pbkdf2:sha256")
     try:
         with engine.begin() as conn:
             res = conn.execute(sqlalchemy.text("""

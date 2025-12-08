@@ -7,13 +7,16 @@ from nltk.stem import WordNetLemmatizer
 
 STOPWORDS = set(stopwords.words("english"))
 _WN_LEMMATIZER = WordNetLemmatizer()
-sbert_model = SentenceTransformer("all-MiniLM-L6-v2")  # for queries ONLY
+sbert_model = SentenceTransformer("all-MiniLM-L6-v2") 
+
+def normalize_title(s: str) -> str:
+    s = s.lower().strip()
+    s = re.sub(r"[^\w\s]", " ", s)  
+    s = re.sub(r"\s+", " ", s)    
+    return s
 
 # Combines all info about the books for matching
 def build_search_text(book):
-    """
-    book: dict with keys like title, authors, genres, description.
-    """
     return (
         f"{book.get('title','')}. "
         f"{book.get('authors','')}. "
@@ -102,29 +105,50 @@ def compute_popularity_score(rating, num_ratings):
     return 0.7 * rating_norm + 0.3 * count_norm
 
 def compute_title_match_score(query, title):
-    q = query.lower()
-    t = title.lower()
-    if q == t:
-        return 1.0
-    if q in t or t in q:
-        return 0.7
-    q_tokens = set(q.split())
-    t_tokens = set(t.split())
-    if not q_tokens:
-        return 0.0
-    overlap = len(q_tokens & t_tokens)
-    return min(0.6, overlap / len(q_tokens))
+    nq = normalize_title(query)
+    nt = normalize_title(title)
 
-def compute_genre_match_score(query, main_genre, sub_genre):
-    q = query.lower()
-    mg = str(main_genre).lower()
-    sg = str(sub_genre).lower()
-    score = 0.0
-    if mg and mg in q:
-        score = max(score, 1.0)
-    if sg and sg in q:
-        score = max(score, 1.0)
-    return score
+    if not nq or not nt:
+        return 0.0
+    if nq == nt:
+        return 1.0
+    
+    q_tokens = nq.split()
+    t_tokens = nt.split()
+
+    if len(q_tokens) <= len(t_tokens):
+        for i in range(len(t_tokens) - len(q_tokens) + 1):
+            if t_tokens[i:i+len(q_tokens)] == q_tokens:
+                return 0.9
+
+    q_set = set(q_tokens)
+    t_set = set(t_tokens)
+    overlap = len(q_set & t_set)
+
+    if len(q_tokens) >= 2 and overlap >= len(q_tokens) - 1:
+        return 0.8
+
+    if overlap > 0:
+        return 0.5 * (overlap / len(q_tokens))
+
+    return 0.0
+
+
+def compute_genre_match_score(query, genre):
+    nq = normalize_title(query)
+    q_tokens = set(nq.split())
+
+    g = str(genre).lower().strip()
+    if not g:
+        return 0.0
+
+    g_tokens = set(re.split(r"[,\s]+", g)) 
+    if not g_tokens:
+        return 0.0
+
+    overlap = len(q_tokens & g_tokens)
+    return overlap / len(g_tokens)
+
 
 def compute_semantic_scores(query, book_embeddings):
     q_emb = sbert_model.encode(
@@ -143,29 +167,36 @@ def combine_scores(query, bm25_raw, sem_raw, books):
     sem_norm = normalize_scores(sem_raw)
 
     title_scores = []
-    genre_scores = []
+    main_genre_scores = []
+    sub_genre_scores = []
     pop_scores = []
 
     for b in books:
+        genres = b.get("genres", "")
+        main_genre, sub_genres = genres[0], genres[1:]
         title_scores.append(compute_title_match_score(q, b["title"]))
-        genre_scores.append(compute_genre_match_score(q, b.get("genres", ""), None))
+        main_genre_scores.append(compute_genre_match_score(q, main_genre))
+        sub_genre_scores.append(compute_genre_match_score(q, sub_genres))
         pop_scores.append(compute_popularity_score(b.get("avg_rating"), b.get("review_count")))
 
     title_norm = normalize_scores(title_scores)
-    genre_norm = np.array(genre_scores, dtype="float32")
+    main_genre_norm = np.array(main_genre_scores, dtype="float32")
+    sub_genre_norm = np.array(sub_genre_scores, dtype="float32")
     pop_norm = normalize_scores(pop_scores)
 
     w_bm25 = 0.25
     w_sem = 0.35
     w_title = 0.20
-    w_genre = 0.05
+    w_main_genre = 0.05
+    w_sub_genre = 0.05
     w_pop = 0.15
 
     final_scores = (
         w_bm25 * bm25_norm +
         w_sem * sem_norm +
         w_title * title_norm +
-        w_genre * genre_norm +
+        w_main_genre * main_genre_norm +
+        w_sub_genre * sub_genre_norm +
         w_pop * pop_norm
     )
 
@@ -173,16 +204,47 @@ def combine_scores(query, bm25_raw, sem_raw, books):
         "bm25_norm": bm25_norm,
         "sem_norm": sem_norm,
         "title_norm": title_norm,
-        "genre_norm": genre_norm,
+        "main_genre_norm": main_genre_norm,
+        "sub_genre_norm": sub_genre_norm,
         "pop_norm": pop_norm,
     }
     return final_scores, debug
 
+def is_title_match_like(query: str, title: str) -> bool:
+    nq = normalize_title(query)
+    nt = normalize_title(title)
+
+    if not nq or not nt:
+        return False
+
+    if nq == nt:
+        return True
+
+    q_tokens = nq.split()
+    t_tokens = nt.split()
+
+    if len(q_tokens) <= len(t_tokens):
+        for i in range(len(t_tokens) - len(q_tokens) + 1):
+            if t_tokens[i:i + len(q_tokens)] == q_tokens:
+                return True
+
+    q_set = set(q_tokens)
+    t_set = set(t_tokens)
+    overlap = len(q_set & t_set)
+
+    if len(q_tokens) <= 2:
+        if overlap == len(q_tokens):
+            return True
+        return False 
+    
+    if overlap >= len(q_tokens) - 1:
+        return True
+
+    return False
+
+
 
 def rank_books(query, books, bm25, tokenized_corpus, book_embeddings, top_n=10):
-    """
-    End-to-end ranking given a query.
-    """
     qtoks = lemmatize_tokens(simple_tokenize(query))
     bm25_scores = bm25.get_scores(qtoks)
     bm25_scores = proximity_boost(bm25_scores, qtoks, tokenized_corpus, boost=1.0, window=5)
@@ -191,6 +253,28 @@ def rank_books(query, books, bm25, tokenized_corpus, book_embeddings, top_n=10):
     sem_scores = compute_semantic_scores(query, book_embeddings)
 
     final_scores, debug = combine_scores(query, bm25_scores, sem_scores, books)
-    order = np.argsort(final_scores)[::-1]
+    final_scores = np.array(final_scores, dtype="float32")
+
+    exact_idxs = []
+    other_idxs = []
+    exact_flags = []
+
+    for i, b in enumerate(books):
+        is_exact_like = is_title_match_like(query, b.get("title", ""))
+        exact_flags.append(is_exact_like)
+        if is_exact_like:
+            exact_idxs.append(i)
+        else:
+            other_idxs.append(i)
+
+    exact_sorted = sorted(exact_idxs, key=lambda i: final_scores[i], reverse=True)
+    others_sorted = sorted(other_idxs, key=lambda i: final_scores[i], reverse=True)
+
+    order_list = exact_sorted + others_sorted
+    if top_n is not None:
+        order_list = order_list[:top_n]
+
+    order = np.array(order_list, dtype=int)
+    debug["exact_title_match"] = np.array(exact_flags, dtype=bool)
 
     return order, final_scores, debug
