@@ -87,7 +87,7 @@ df.sort_values(by='No. of People rated', ascending=False, inplace=True)
 df = df.iloc[:300]
 
 # combine main genre + sub genre columns
-df['Genre'] = df['Main Genre'] + ' ' + df['Sub Genre']
+df['Genre'] = df['Main Genre'] + ', ' + df['Sub Genre']
 df = df.drop(columns=['Main Genre'])
 df = df.drop(columns=['Sub Genre'])
 
@@ -103,7 +103,26 @@ order.insert(2, 'Clean_Author')
 
 df = df[order]
 
-df['Genre'] = df['Genre'].apply(clean_genre)
+# df['Genre'] = df['Genre'].apply(clean_genre)
 
 # upload to new csv vile 
-df.to_csv('books_with_descriptions.csv', index=False)
+df.to_csv('cleaned_data.csv', index=False)
+
+
+# base_dir = os.path.dirname(os.path.abspath(__file__))
+# csv_file_path = os.path.join(base_dir, "cleaned_data.csv")
+
+# df_cleaned = pd.read_csv(csv_file_path)
+
+# csv_file_path = os.path.join(base_dir, "books_with_descriptions.csv")
+
+# df_descriptions = pd.read_csv(csv_file_path)
+
+# df_descriptions['Genre'] = df_cleaned['Genre']
+
+# df_descriptions.to_csv('books_with_descriptions.csv', index = False)
+
+
+
+
+
