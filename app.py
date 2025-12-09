@@ -13,6 +13,7 @@ CORS(
     resources={r"/*": {"origins": "*"}},
     allow_headers=["Content-Type"],
     methods=["GET", "POST", "DELETE", "PUT", "OPTIONS"],
+    origins=["http://localhost:3000"]
 )
 
 engine = sqlalchemy.create_engine("sqlite:///readmatch.db")
