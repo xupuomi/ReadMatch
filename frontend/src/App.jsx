@@ -290,9 +290,6 @@ function BookDetailPage({ user, userId, authReady }) {
       {error && <div className="text-red-600">{error}</div>}
       {!loading && !error && book && (
         <div className="flex gap-6">
-          {/* Placeholder book cover */}
-          <div className="w-40 h-56 bg-gray-200 rounded" />
-
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{book.title}</h1>
             <div className="text-sm text-slate-600">{book.authors}</div>
