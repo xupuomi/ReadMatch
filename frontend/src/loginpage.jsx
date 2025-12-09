@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API_BASE = "http://127.0.0.1:5000";
+const API_BASE = "http://localhost:5001";
 
 export default function LoginPage({ onAuth, user }) {
 	const navigate = useNavigate();

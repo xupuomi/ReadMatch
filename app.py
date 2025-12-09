@@ -13,7 +13,7 @@ CORS(
     resources={r"/*": {"origins": "*"}},
     allow_headers=["Content-Type"],
     methods=["GET", "POST", "DELETE", "PUT", "OPTIONS"],
-    origins=["http://localhost:3000"]
+    origins=["http://localhost:3000", "https://localhost:5001"]
 )
 
 engine = sqlalchemy.create_engine("sqlite:///readmatch.db")
@@ -323,4 +323,4 @@ def list_user_ratings(user_id):
 
 if __name__ == "__main__":
     # allow running with python3 app.py
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5001, debug=True)
