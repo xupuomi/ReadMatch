@@ -177,8 +177,6 @@ def combine_scores(query, bm25_raw, sem_raw, books, user_pref_raw=None):
         user_pref_norm = normalize_scores(user_pref_raw)
     else:
         user_pref_norm = np.zeros_like(bm25_norm)
-    
-    print("User preference raw scores:", user_pref_raw)
 
     title_scores = []
     main_genre_scores = []

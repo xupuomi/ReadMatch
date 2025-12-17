@@ -148,10 +148,8 @@ def search():
         return jsonify({"results": []})
     
     user_id = data.get("user_id")  
-    print("Search user_id:", user_id)
     if user_id is not None:
         user_profile_emb = get_user_profile_vector(engine, user_id)
-        print("User profile emb is None?", user_profile_emb is None)
     else:
         user_profile_emb = None
 
